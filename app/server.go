@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
@@ -37,15 +39,20 @@ func main() {
 
 	path := extractPath(reqByte)
 	fmt.Println("path: ", path)
-	
+
 	switch path {
 	case "/":
 		response = "HTTP/1.1 200 OK\r\n\r\n"
 	case "/index.html":
 		response = "HTTP/1.1 404 Not Found\r\n\r\n"
 	default:
-		randomString := processPathToFetchRandomString(path)
-		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
+		randomString, err := processPathToFetchRandomString(path)
+
+		if err.Error() == "invalid path" {
+			response = "HTTP/1.1 404 Not Found\r\n\r\n"
+		} else {
+			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
+		}
 	}
 
 	_, err = conn.Write([]byte(response))
@@ -65,10 +72,13 @@ func extractPath(reqByte []byte) string {
 	return path
 }
 
-func processPathToFetchRandomString(path string) string {
+func processPathToFetchRandomString(path string) (string, error) {
 	pathArr := strings.Split(path, "/")
-	if len(pathArr) > 1 {
-		return pathArr[2]
+	if pathArr[1] == "echo" {
+		if len(pathArr) > 1 {
+			return pathArr[2], nil
+		}
+		return "", nil
 	}
-	return ""
+	return "", errors.New("invalid path")
 }
