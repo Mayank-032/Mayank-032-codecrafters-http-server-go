@@ -47,8 +47,7 @@ func main() {
 		response = "HTTP/1.1 404 Not Found\r\n\r\n"
 	default:
 		randomString, err := processPathToFetchRandomString(path)
-
-		if err.Error() == "invalid path" {
+		if err != nil && err.Error() == "invalid path" {
 			response = "HTTP/1.1 404 Not Found\r\n\r\n"
 		} else {
 			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
@@ -76,7 +75,14 @@ func processPathToFetchRandomString(path string) (string, error) {
 	pathArr := strings.Split(path, "/")
 	if pathArr[1] == "echo" {
 		if len(pathArr) > 1 {
-			return pathArr[2], nil
+			ind := 2
+			randomString := ""
+			for ind < len(pathArr) {
+				randomString += pathArr[ind] + "/"
+				ind++
+			}
+			randomString = randomString[:len(randomString) - 1]
+			return randomString, nil
 		}
 		return "", nil
 	}
