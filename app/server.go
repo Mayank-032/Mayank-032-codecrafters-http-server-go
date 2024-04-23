@@ -34,11 +34,9 @@ func main() {
 	fmt.Printf("req_bytes_size: %v, req_bytes: %v\n", reqByteSize, string(reqByte))
 
 	path := extractPath(reqByte)
+	randomString := processPathToFetchRandomString(path)
 
-	response := "HTTP/1.1 200 OK\r\n\r\n"
-	if path != "/" {
-		response = "HTTP/1.1 404 Not Found\r\n\r\n"
-	}
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
 
 	_, err = conn.Write([]byte(response))
 	if err != nil {
@@ -55,4 +53,12 @@ func extractPath(reqByte []byte) string {
 		path = reqBodySplitArr[1]
 	}
 	return path
+}
+
+func processPathToFetchRandomString(path string) string {
+	pathArr := strings.Split(path, "/")
+	if len(pathArr) > 1 {
+		return pathArr[2]
+	}
+	return ""
 }
