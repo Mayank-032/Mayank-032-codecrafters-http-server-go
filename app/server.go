@@ -26,45 +26,47 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-
-		var reqByte = make([]byte, 4096)
-		reqByteSize, err := conn.Read(reqByte)
-		if err != nil {
-			fmt.Println("Error reading connection: ", err.Error())
-			os.Exit(1)
-		}
-		fmt.Printf("req_bytes_size: %v, req_bytes: %v\n", reqByteSize, string(reqByte))
-
-		var response string
-
-		path := extractPath(reqByte)
-		fmt.Println("path: ", path)
-
-		header := extractHeader(reqByte)
-		fmt.Println("header: ", header)
-
-		switch path {
-		case "/":
-			response = "HTTP/1.1 200 OK\r\n\r\n"
-		case "/index.html":
-			response = "HTTP/1.1 404 Not Found\r\n\r\n"
-		case "/user-agent":
-			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(header), header)
-		default:
-			randomString, err := processPathToFetchRandomString(path)
-			if err != nil && err.Error() == "invalid path" {
-				response = "HTTP/1.1 404 Not Found\r\n\r\n"
-			} else {
-				response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
+		
+		go func(conn net.Conn) {
+			var reqByte = make([]byte, 4096)
+			reqByteSize, err := conn.Read(reqByte)
+			if err != nil {
+				fmt.Println("Error reading connection: ", err.Error())
+				os.Exit(1)
 			}
-		}
+			fmt.Printf("req_bytes_size: %v, req_bytes: %v\n", reqByteSize, string(reqByte))
 
-		_, err = conn.Write([]byte(response))
-		if err != nil {
-			fmt.Println("Error writing on connection: ", err.Error())
-			os.Exit(1)
-		}
-		fmt.Println("successfully written on connection: ", response)
+			var response string
+
+			path := extractPath(reqByte)
+			fmt.Println("path: ", path)
+
+			header := extractHeader(reqByte)
+			fmt.Println("header: ", header)
+
+			switch path {
+			case "/":
+				response = "HTTP/1.1 200 OK\r\n\r\n"
+			case "/index.html":
+				response = "HTTP/1.1 404 Not Found\r\n\r\n"
+			case "/user-agent":
+				response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(header), header)
+			default:
+				randomString, err := processPathToFetchRandomString(path)
+				if err != nil && err.Error() == "invalid path" {
+					response = "HTTP/1.1 404 Not Found\r\n\r\n"
+				} else {
+					response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
+				}
+			}
+
+			_, err = conn.Write([]byte(response))
+			if err != nil {
+				fmt.Println("Error writing on connection: ", err.Error())
+				os.Exit(1)
+			}
+			fmt.Println("successfully written on connection: ", response)
+		}(conn)
 	}
 }
 
@@ -103,7 +105,7 @@ func extractHeader(reqByte []byte) string {
 
 		headerArr := strings.Split(headerKeyValStr, ": ")
 		if len(headerArr) > 1 {
-			return headerArr[1];
+			return headerArr[1]
 		}
 		return ""
 	}
