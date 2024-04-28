@@ -2,12 +2,18 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"strings"
 
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+)
+
+const (
+	OK_RESPONSE  = "HTTP/1.1 200 OK\r\n\r\n"
+	ERR_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n"
 )
 
 func main() {
@@ -48,19 +54,75 @@ func readFromConn(conn net.Conn) {
 	header := extractHeader(reqByte)
 	fmt.Println("header: ", header)
 
+	var directoryPath string
+	flag.StringVar(&directoryPath, "directory", "", "Path to the directory")
+	flag.Parse()
+
+	fmt.Println("directory path: ", directoryPath)
+
 	switch path {
 	case "/":
-		response = "HTTP/1.1 200 OK\r\n\r\n"
+		response = OK_RESPONSE
 	case "/index.html":
-		response = "HTTP/1.1 404 Not Found\r\n\r\n"
+		response = ERR_RESPONSE
 	case "/user-agent":
-		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(header), header)
+		response = OK_RESPONSE + fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(header), header)
+		fallthrough
 	default:
-		randomString, err := processPathToFetchRandomString(path)
+		remainingPathString, commandType, err := processPathToFetchString(path)
 		if err != nil && err.Error() == "invalid path" {
 			response = "HTTP/1.1 404 Not Found\r\n\r\n"
 		} else {
-			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(randomString), randomString)
+			fmt.Println("rem_path_str: ", remainingPathString)
+			fmt.Println("command_type: ", commandType)
+			switch commandType {
+			case "echo":
+				response = OK_RESPONSE + fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(remainingPathString), remainingPathString)
+			case "files":
+				files, err := os.ReadDir(directoryPath)
+				if err != nil {
+					fmt.Println("unable to read directory: ", err.Error())
+					os.Exit(1)
+				}
+
+				fmt.Println("here1, len_of_files: ", len(files))
+
+				var flag = false
+				for _, file := range files {
+					if file.Name() == remainingPathString {
+						flag = true
+						break
+					}
+				}
+
+				fmt.Println("code is here, flag: ", flag)
+
+				if !flag {
+					response = ERR_RESPONSE
+				} else {
+					if string(directoryPath[len(directoryPath) - 1]) != "/" {
+						remainingPathString = "/"+remainingPathString
+					}
+					filePath := directoryPath + remainingPathString
+					file, err := os.Open(filePath)
+					if err != nil {
+						fmt.Println("unable to open file: ", err.Error())
+						os.Exit(1)
+					}
+
+					var content = make([]byte, 4096)
+					fileContentSize, err := file.Read(content)
+					if err != nil {
+						fmt.Println("unable to read file content: " + err.Error())
+						os.Exit(1)
+					}
+
+					response = OK_RESPONSE + fmt.Sprintf("Content-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%v", fileContentSize, string(content))
+				}
+			default:
+				fmt.Println("Invalid command type")
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -81,9 +143,11 @@ func extractPath(reqByte []byte) string {
 	return path
 }
 
-func processPathToFetchRandomString(path string) (string, error) {
+func processPathToFetchString(path string) (string, string, error) {
 	pathArr := strings.Split(path, "/")
-	if pathArr[1] == "echo" {
+
+	switch pathArr[1] {
+	case "echo", "files":
 		if len(pathArr) > 2 {
 			ind := 2
 			randomString := ""
@@ -92,11 +156,13 @@ func processPathToFetchRandomString(path string) (string, error) {
 				ind++
 			}
 			randomString = randomString[:len(randomString)-1]
-			return randomString, nil
+
+			return randomString, pathArr[1], nil
 		}
-		return "", nil
+		return "", pathArr[1], errors.New("invalid path")
 	}
-	return "", errors.New("invalid path")
+
+	return "", pathArr[1], errors.New("invalid path")
 }
 
 func extractHeader(reqByte []byte) string {
