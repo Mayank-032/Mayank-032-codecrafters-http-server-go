@@ -26,6 +26,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	var directoryPath string
+	flag.StringVar(&directoryPath, "directory", "", "Path to the directory")
+	flag.Parse()
+
+	fmt.Println("directory path: ", directoryPath)
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -33,11 +39,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		go readFromConn(conn)
+		go readFromConn(conn, directoryPath)
 	}
 }
 
-func readFromConn(conn net.Conn) {
+func readFromConn(conn net.Conn, directoryPath string) {
 	var reqByte = make([]byte, 4096)
 	reqByteSize, err := conn.Read(reqByte)
 	if err != nil {
@@ -54,12 +60,6 @@ func readFromConn(conn net.Conn) {
 	header := extractHeader(reqByte)
 	fmt.Println("header: ", header)
 
-	var directoryPath string
-	flag.StringVar(&directoryPath, "directory", "", "Path to the directory")
-	flag.Parse()
-
-	fmt.Println("directory path: ", directoryPath)
-
 	switch path {
 	case "/":
 		response = OK_RESPONSE
@@ -67,7 +67,6 @@ func readFromConn(conn net.Conn) {
 		response = ERR_RESPONSE
 	case "/user-agent":
 		response = OK_RESPONSE + fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(header), header)
-		fallthrough
 	default:
 		remainingPathString, commandType, err := processPathToFetchString(path)
 		if err != nil && err.Error() == "invalid path" {
@@ -95,8 +94,6 @@ func readFromConn(conn net.Conn) {
 					}
 				}
 
-				fmt.Println("code is here, flag: ", flag)
-
 				if !flag {
 					response = ERR_RESPONSE
 				} else {
@@ -109,6 +106,7 @@ func readFromConn(conn net.Conn) {
 						fmt.Println("unable to open file: ", err.Error())
 						os.Exit(1)
 					}
+					defer file.Close()
 
 					var content = make([]byte, 4096)
 					fileContentSize, err := file.Read(content)
