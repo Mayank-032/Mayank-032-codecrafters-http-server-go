@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 
 	// Uncomment this block to pass the first stage
@@ -12,7 +13,7 @@ import (
 )
 
 const (
-	OK_RESPONSE  = "HTTP/1.1 200 OK\r\n\r\n"
+	OK_RESPONSE  = "HTTP/1.1 200 OK\r\n"
 	ERR_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n"
 )
 
@@ -70,10 +71,8 @@ func readFromConn(conn net.Conn, directoryPath string) {
 	default:
 		remainingPathString, commandType, err := processPathToFetchString(path)
 		if err != nil && err.Error() == "invalid path" {
-			response = "HTTP/1.1 404 Not Found\r\n\r\n"
+			response = ERR_RESPONSE
 		} else {
-			fmt.Println("rem_path_str: ", remainingPathString)
-			fmt.Println("command_type: ", commandType)
 			switch commandType {
 			case "echo":
 				response = OK_RESPONSE + fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(remainingPathString), remainingPathString)
@@ -83,8 +82,6 @@ func readFromConn(conn net.Conn, directoryPath string) {
 					fmt.Println("unable to read directory: ", err.Error())
 					os.Exit(1)
 				}
-
-				fmt.Println("here1, len_of_files: ", len(files))
 
 				var flag = false
 				for _, file := range files {
@@ -97,25 +94,20 @@ func readFromConn(conn net.Conn, directoryPath string) {
 				if !flag {
 					response = ERR_RESPONSE
 				} else {
-					if string(directoryPath[len(directoryPath) - 1]) != "/" {
-						remainingPathString = "/"+remainingPathString
+					if string(directoryPath[len(directoryPath)-1]) != "/" {
+						remainingPathString = "/" + remainingPathString
 					}
+
 					filePath := directoryPath + remainingPathString
-					file, err := os.Open(filePath)
+					fmt.Println("filePath: " + filePath)
+
+					fileContent, err := os.ReadFile(filePath)
 					if err != nil {
 						fmt.Println("unable to open file: ", err.Error())
 						os.Exit(1)
 					}
-					defer file.Close()
 
-					var content = make([]byte, 4096)
-					fileContentSize, err := file.Read(content)
-					if err != nil {
-						fmt.Println("unable to read file content: " + err.Error())
-						os.Exit(1)
-					}
-
-					response = OK_RESPONSE + fmt.Sprintf("Content-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%v", fileContentSize, string(content))
+					response = OK_RESPONSE + fmt.Sprintf("Content-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%v", strconv.Itoa(len(fileContent)), string(fileContent))
 				}
 			default:
 				fmt.Println("Invalid command type")
